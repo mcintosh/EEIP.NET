@@ -22,7 +22,9 @@ namespace AllenBradleyPointIO
         {
             EEIPClient eeipClient = new EEIPClient();
             //Ip-Address of the Ethernet-IP Device (In this case Allen-Bradley 1734-AENT Point I/O)
-            eeipClient.IPAddress = "192.168.178.107";
+            //eeipClient.IPAddress = "192.168.178.107";
+            eeipClient.IPAddress = "192.168.0.250";
+
             //A Session has to be registered before any communication can be established
             eeipClient.RegisterSession();
 

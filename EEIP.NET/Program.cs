@@ -14,12 +14,12 @@ namespace ConsoleApplication1
             Sres.Net.EEIP.EEIPClient eipClient = new Sres.Net.EEIP.EEIPClient();
 
             //UInt32 sessionHandle = eipClient.RegisterSession("192.168.178.66", 0xAF12);
-
-            UInt32 sessionHandle =  eipClient.RegisterSession("192.168.178.107", 0xAF12);
+            //UInt32 sessionHandle = eipClient.RegisterSession("192.168.178.107", 0xAF12);
+            UInt32 sessionHandle = eipClient.RegisterSession("192.168.0.107", 0xAF12);
             //            eipClient.O_T_ConnectionType = Sres.Net.EEIP.ConnectionType.Null;
             //            eipClient.O_T_Length = 0;
-           
-            
+
+
             eipClient.O_T_InstanceID = 101;
             eipClient.O_T_Length = 2;//7;
             eipClient.O_T_RealTimeFormat = Sres.Net.EEIP.RealTimeFormat.Header32Bit;
