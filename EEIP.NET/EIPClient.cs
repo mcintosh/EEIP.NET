@@ -139,7 +139,7 @@ namespace Sres.Net.EEIP
         public EEIPClient()
         {
             Console.WriteLine("EEIP Library Version: " + Assembly.GetExecutingAssembly().GetName().Version.ToString());
-            Console.WriteLine("Copyright (c) Stefan Rossmann Engineering Solutions");
+            //Console.WriteLine("Copyright (c) Stefan Rossmann Engineering Solutions");
             Console.WriteLine();
         }
 
@@ -504,7 +504,7 @@ namespace Sres.Net.EEIP
             //encapsulation.toBytes();
             
             stream.Write(dataToWrite, 0, dataToWrite.Length);
-            byte[] data = new Byte[564];
+            byte[] data = new Byte[1024];
 
             Int32 bytes = stream.Read(data, 0, data.Length);
 
@@ -749,7 +749,7 @@ namespace Sres.Net.EEIP
             {
                 //Handle Exception  to allow Forward close if the connection was closed by the Remote Device before
             }
-            byte[] data = new Byte[564];
+            byte[] data = new Byte[1024];
 
             try
             {
@@ -788,7 +788,7 @@ namespace Sres.Net.EEIP
 
             while (!stopUDP)
             {
-                byte[] o_t_IOData = new byte[564];
+                byte[] o_t_IOData = new byte[1024];
                 System.Net.IPEndPoint endPointsend = new System.Net.IPEndPoint(System.Net.IPAddress.Parse(IPAddress), TargetUDPPort);
                
                 UdpState send = new UdpState();
@@ -1015,14 +1015,14 @@ namespace Sres.Net.EEIP
             encapsulation.toBytes();
 
             stream.Write(dataToWrite, 0, dataToWrite.Length);
-            byte[] data = new Byte[564];
+            byte[] data = new Byte[1024];
 
             Int32 bytes = stream.Read(data, 0, data.Length);
 
             //--------------------------BEGIN Error?
             if (data[42] != 0)      //Exception codes see "Table B-1.1 CIP General Status Codes"
             {
-                throw new CIPException(GeneralStatusCodes.GetStatusCode(data[42]));
+                //throw new CIPException(GeneralStatusCodes.GetStatusCode(data[42]));
             }
             //--------------------------END Error?
 
@@ -1096,7 +1096,7 @@ namespace Sres.Net.EEIP
            
 
             stream.Write(dataToWrite, 0, dataToWrite.Length);
-            byte[] data = new Byte[564];
+            byte[] data = new Byte[1024];
 
             Int32 bytes = stream.Read(data, 0, data.Length);
             //--------------------------BEGIN Error?
@@ -1180,7 +1180,7 @@ namespace Sres.Net.EEIP
             encapsulation.toBytes();
 
             stream.Write(dataToWrite, 0, dataToWrite.Length);
-            byte[] data = new Byte[564];
+            byte[] data = new Byte[1024];
 
             Int32 bytes = stream.Read(data, 0, data.Length);
 
@@ -1197,6 +1197,582 @@ namespace Sres.Net.EEIP
             return returnData;
         }
 
+
+        /// <summary>
+        /// Implementation of Common Service "Read_Tag" - Service Code: 0x4C
+        /// </summary>
+        /// <param name="tagName">Name of the tag to read (supports array syntax like "TagName[index]")</param>
+        /// <param name="elements">Number of elements to read (use 1 for single values)</param>
+        /// <returns>Tag data as byte array</returns>
+        public byte[] ReadTag(string tagName, ushort elements = 1)
+        {
+            if (sessionHandle == 0)
+                this.RegisterSession();
+
+            // Parse tag name for array index syntax like "TagName[index]"
+            string baseTagName = tagName;
+            int arrayIndex = -1;
+
+            int bracketPos = tagName.IndexOf('[');
+            if (bracketPos > 0)
+            {
+                int closeBracketPos = tagName.IndexOf(']', bracketPos);
+                if (closeBracketPos > bracketPos)
+                {
+                    baseTagName = tagName.Substring(0, bracketPos);
+                    string indexStr = tagName.Substring(bracketPos + 1, closeBracketPos - bracketPos - 1);
+                    if (!int.TryParse(indexStr, out arrayIndex) || arrayIndex < 0)
+                    {
+                        arrayIndex = -1;
+                    }
+                }
+            }
+
+            // Build the tag path (ANSI extended symbol segment)
+            List<byte> tagPath = new List<byte>();
+            tagPath.Add(0x91); // ANSI extended symbol segment
+            tagPath.Add((byte)baseTagName.Length); // String length
+            foreach (char c in baseTagName)
+            {
+                tagPath.Add((byte)c);
+            }
+            // Pad to even number of bytes
+            if (baseTagName.Length % 2 != 0)
+                tagPath.Add(0x00);
+
+            // Add array element segment if index was specified
+            if (arrayIndex >= 0)
+            {
+                if (arrayIndex <= 255)
+                {
+                    // 8-bit element segment
+                    tagPath.Add(0x28);
+                    tagPath.Add((byte)arrayIndex);
+                }
+                else if (arrayIndex <= 65535)
+                {
+                    // 16-bit element segment
+                    tagPath.Add(0x29);
+                    tagPath.Add(0x00); // Padding
+                    tagPath.Add((byte)(arrayIndex & 0xFF));
+                    tagPath.Add((byte)((arrayIndex >> 8) & 0xFF));
+                }
+            }
+
+            byte[] requestedPath = tagPath.ToArray();
+
+            Encapsulation encapsulation = new Encapsulation();
+            encapsulation.SessionHandle = sessionHandle;
+            encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
+            encapsulation.Length = (UInt16)(16 + 4 + requestedPath.Length); // CPF header + service data + path
+
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+
+            Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat();
+            commonPacketFormat.ItemCount = 0x02;
+            commonPacketFormat.AddressItem = 0x0000;
+            commonPacketFormat.AddressLength = 0x0000;
+            commonPacketFormat.DataItem = 0xB2;
+            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + 2); // service + path size + path + elements
+
+            // Service code 0x4C (Read Tag)
+            commonPacketFormat.Data.Add((byte)Sres.Net.EEIP.CIPCommonServices.Read_Tag);
+
+            // Path size in words
+            commonPacketFormat.Data.Add((byte)(requestedPath.Length / 2));
+
+            // Add the tag path
+            for (int i = 0; i < requestedPath.Length; i++)
+            {
+                commonPacketFormat.Data.Add(requestedPath[i]);
+            }
+
+            // Number of elements (2 bytes)
+            commonPacketFormat.Data.Add((byte)(elements & 0xFF));
+            commonPacketFormat.Data.Add((byte)((elements >> 8) & 0xFF));
+
+            byte[] dataToWrite = new byte[encapsulation.toBytes().Length + commonPacketFormat.toBytes().Length];
+            System.Buffer.BlockCopy(encapsulation.toBytes(), 0, dataToWrite, 0, encapsulation.toBytes().Length);
+            System.Buffer.BlockCopy(commonPacketFormat.toBytes(), 0, dataToWrite, encapsulation.toBytes().Length, commonPacketFormat.toBytes().Length);
+
+            stream.Write(dataToWrite, 0, dataToWrite.Length);
+            byte[] data = new Byte[1024];
+
+            Int32 bytes = stream.Read(data, 0, data.Length);
+
+            if (data[42] != 0)
+            {
+                throw new CIPException(GeneralStatusCodes.GetStatusCode(data[42]));
+            }
+
+            byte[] returnData = new byte[bytes - 44];
+            System.Buffer.BlockCopy(data, 44, returnData, 0, bytes - 44);
+
+            return returnData;
+        }
+
+
+        /*
+        /// <summary>
+        /// Implementation of Common Service "Read_Tag" - Service Code: 0x4C
+        /// </summary>
+        /// <param name="tagName">Name of the tag to read</param>
+        /// <param name="elements">Number of elements to read (use 1 for single values)</param>
+        /// <returns>Tag data as byte array</returns>
+        public byte[] ReadTag(string tagName, ushort elements = 1)
+        {
+            if (sessionHandle == 0)
+                this.RegisterSession();
+
+            // Build the tag path (ANSI extended symbol segment)
+            List<byte> tagPath = new List<byte>();
+            tagPath.Add(0x91); // ANSI extended symbol segment
+            tagPath.Add((byte)tagName.Length); // String length
+            foreach (char c in tagName)
+            {
+                tagPath.Add((byte)c);
+            }
+            // Pad to even number of bytes
+            if (tagName.Length % 2 != 0)
+                tagPath.Add(0x00);
+
+            byte[] requestedPath = tagPath.ToArray();
+
+            Encapsulation encapsulation = new Encapsulation();
+            encapsulation.SessionHandle = sessionHandle;
+            encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
+            encapsulation.Length = (UInt16)(16 + 4 + requestedPath.Length); // CPF header + service data + path
+
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+
+            Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat();
+            commonPacketFormat.ItemCount = 0x02;
+            commonPacketFormat.AddressItem = 0x0000;
+            commonPacketFormat.AddressLength = 0x0000;
+            commonPacketFormat.DataItem = 0xB2;
+            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + 2); // service + path size + path + elements
+
+            // Service code 0x4C (Read Tag)
+            commonPacketFormat.Data.Add((byte)Sres.Net.EEIP.CIPCommonServices.Read_Tag);
+
+            // Path size in words
+            commonPacketFormat.Data.Add((byte)(requestedPath.Length / 2));
+
+            // Add the tag path
+            for (int i = 0; i < requestedPath.Length; i++)
+            {
+                commonPacketFormat.Data.Add(requestedPath[i]);
+            }
+
+            // Number of elements (2 bytes)
+            commonPacketFormat.Data.Add((byte)(elements & 0xFF));
+            commonPacketFormat.Data.Add((byte)((elements >> 8) & 0xFF));
+
+            byte[] dataToWrite = new byte[encapsulation.toBytes().Length + commonPacketFormat.toBytes().Length];
+            System.Buffer.BlockCopy(encapsulation.toBytes(), 0, dataToWrite, 0, encapsulation.toBytes().Length);
+            System.Buffer.BlockCopy(commonPacketFormat.toBytes(), 0, dataToWrite, encapsulation.toBytes().Length, commonPacketFormat.toBytes().Length);
+
+            stream.Write(dataToWrite, 0, dataToWrite.Length);
+            byte[] data = new Byte[1024];
+
+            Int32 bytes = stream.Read(data, 0, data.Length);
+
+            if (data[42] != 0)
+            {
+                throw new CIPException(GeneralStatusCodes.GetStatusCode(data[42]));
+            }
+
+            byte[] returnData = new byte[bytes - 44];
+            System.Buffer.BlockCopy(data, 44, returnData, 0, bytes - 44);
+
+            return returnData;
+        }
+        */
+
+        /// <summary>
+        /// Implementation of Common Service "Read_Tag_Fragmented" - Service Code: 0x52
+        /// </summary>
+        /// <param name="tagName">Name of the tag to read</param>
+        /// <param name="elements">Number of elements to read (use 1 for single values)</param>
+        /// <param name="offset">Offset in bytes for fragmented reads (use 0 for first fragment)</param>
+        /// <returns>Tag data as byte array</returns>
+        public byte[] ReadTagFragmented(string tagName, ushort elements, uint offset = 0)
+        {
+            if (sessionHandle == 0)
+                this.RegisterSession();
+
+            // Build the tag path (ANSI extended symbol segment)
+            List<byte> tagPath = new List<byte>();
+            tagPath.Add(0x91); // ANSI extended symbol segment
+            tagPath.Add((byte)tagName.Length); // String length
+            foreach (char c in tagName)
+            {
+                tagPath.Add((byte)c);
+            }
+            // Pad to even number of bytes
+            if (tagName.Length % 2 != 0)
+                tagPath.Add(0x00);
+
+            byte[] requestedPath = tagPath.ToArray();
+
+            Encapsulation encapsulation = new Encapsulation();
+            encapsulation.SessionHandle = sessionHandle;
+            encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
+            encapsulation.Length = (UInt16)(16 + 8 + requestedPath.Length); // CPF header + service data + path
+
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+
+            Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat();
+            commonPacketFormat.ItemCount = 0x02;
+            commonPacketFormat.AddressItem = 0x0000;
+            commonPacketFormat.AddressLength = 0x0000;
+            commonPacketFormat.DataItem = 0xB2;
+            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + 6); // service + path size + path + elements + offset
+
+            // Service code 0x52 (Read Tag Fragmented)
+            commonPacketFormat.Data.Add((byte)Sres.Net.EEIP.CIPCommonServices.Read_Tag_Fragmented);
+
+            // Path size in words
+            commonPacketFormat.Data.Add((byte)(requestedPath.Length / 2));
+
+            // Add the tag path
+            for (int i = 0; i < requestedPath.Length; i++)
+            {
+                commonPacketFormat.Data.Add(requestedPath[i]);
+            }
+
+            // Number of elements (2 bytes)
+            commonPacketFormat.Data.Add((byte)(elements & 0xFF));
+            commonPacketFormat.Data.Add((byte)((elements >> 8) & 0xFF));
+
+            // Offset in bytes (4 bytes) for fragmented reads
+            commonPacketFormat.Data.Add((byte)(offset & 0xFF));
+            commonPacketFormat.Data.Add((byte)((offset >> 8) & 0xFF));
+            commonPacketFormat.Data.Add((byte)((offset >> 16) & 0xFF));
+            commonPacketFormat.Data.Add((byte)((offset >> 24) & 0xFF));
+
+            byte[] dataToWrite = new byte[encapsulation.toBytes().Length + commonPacketFormat.toBytes().Length];
+            System.Buffer.BlockCopy(encapsulation.toBytes(), 0, dataToWrite, 0, encapsulation.toBytes().Length);
+            System.Buffer.BlockCopy(commonPacketFormat.toBytes(), 0, dataToWrite, encapsulation.toBytes().Length, commonPacketFormat.toBytes().Length);
+
+            stream.Write(dataToWrite, 0, dataToWrite.Length);
+            byte[] data = new Byte[1024];
+
+            Int32 bytes = stream.Read(data, 0, data.Length);
+
+            if (data[42] != 0)
+            {
+                throw new CIPException(GeneralStatusCodes.GetStatusCode(data[42]));
+            }
+
+            byte[] returnData = new byte[bytes - 44];
+            System.Buffer.BlockCopy(data, 44, returnData, 0, bytes - 44);
+
+            return returnData;
+        }
+
+        /*
+                /// <summary>
+                /// Implementation of Common Service "Write_Tag" - Service Code: 0x4D
+                /// </summary>
+                /// <param name="tagName">Name of the tag to write</param>
+                /// <param name="dataType">CIP data type code (e.g., 0xC3 for INT, 0xC4 for DINT)</param>
+                /// <param name="data">Data to write as byte array</param>
+                /// <param name="elements">Number of elements to write (use 1 for single values)</param>
+                /// <returns>Response data as byte array</returns>
+                public byte[] WriteTag(string tagName, ushort dataType, byte[] data, ushort elements = 1)
+                {
+                    if (sessionHandle == 0)
+                        this.RegisterSession();
+
+                    List<byte> tagPath = new List<byte>();
+                    tagPath.Add(0x91);
+                    tagPath.Add((byte)tagName.Length);
+                    foreach (char c in tagName)
+                    {
+                        tagPath.Add((byte)c);
+                    }
+                    if (tagName.Length % 2 != 0)
+                        tagPath.Add(0x00);
+
+                    byte[] requestedPath = tagPath.ToArray();
+
+                    Encapsulation encapsulation = new Encapsulation();
+                    encapsulation.SessionHandle = sessionHandle;
+                    encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
+                    encapsulation.Length = (UInt16)(16 + 6 + requestedPath.Length + data.Length);
+
+                    encapsulation.CommandSpecificData.Add(0);
+                    encapsulation.CommandSpecificData.Add(0);
+                    encapsulation.CommandSpecificData.Add(0);
+                    encapsulation.CommandSpecificData.Add(0);
+                    encapsulation.CommandSpecificData.Add(0);
+                    encapsulation.CommandSpecificData.Add(0);
+
+                    Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat();
+                    commonPacketFormat.ItemCount = 0x02;
+                    commonPacketFormat.AddressItem = 0x0000;
+                    commonPacketFormat.AddressLength = 0x0000;
+                    commonPacketFormat.DataItem = 0xB2;
+                    commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + 4 + data.Length);
+
+                    commonPacketFormat.Data.Add((byte)Sres.Net.EEIP.CIPCommonServices.Write_Tag);
+                    commonPacketFormat.Data.Add((byte)(requestedPath.Length / 2));
+
+                    for (int i = 0; i < requestedPath.Length; i++)
+                    {
+                        commonPacketFormat.Data.Add(requestedPath[i]);
+                    }
+
+                    commonPacketFormat.Data.Add((byte)(dataType & 0xFF));
+                    commonPacketFormat.Data.Add((byte)((dataType >> 8) & 0xFF));
+                    commonPacketFormat.Data.Add((byte)(elements & 0xFF));
+                    commonPacketFormat.Data.Add((byte)((elements >> 8) & 0xFF));
+
+                    for (int i = 0; i < data.Length; i++)
+                    {
+                        commonPacketFormat.Data.Add(data[i]);
+                    }
+
+                    byte[] dataToWrite = new byte[encapsulation.toBytes().Length + commonPacketFormat.toBytes().Length];
+                    System.Buffer.BlockCopy(encapsulation.toBytes(), 0, dataToWrite, 0, encapsulation.toBytes().Length);
+                    System.Buffer.BlockCopy(commonPacketFormat.toBytes(), 0, dataToWrite, encapsulation.toBytes().Length, commonPacketFormat.toBytes().Length);
+
+                    stream.Write(dataToWrite, 0, dataToWrite.Length);
+                    byte[] response = new Byte[1024];
+                    Int32 bytes = stream.Read(response, 0, response.Length);
+
+                    if (response[42] != 0)
+                    {
+                        throw new CIPException(GeneralStatusCodes.GetStatusCode(response[42]));
+                    }
+
+                    byte[] returnData = new byte[bytes - 44];
+                    System.Buffer.BlockCopy(response, 44, returnData, 0, bytes - 44);
+                    return returnData;
+                }
+        */
+        /// <summary>
+        /// Implementation of Common Service "Write_Tag" - Service Code: 0x4D
+        /// </summary>
+        /// <param name="tagName">Name of the tag to write (supports array syntax like "TagName[index]")</param>
+        /// <param name="dataType">CIP data type code (e.g., 0xC3 for INT, 0xC4 for DINT)</param>
+        /// <param name="data">Data to write as byte array</param>
+        /// <param name="elements">Number of elements to write (use 1 for single values)</param>
+        /// <returns>Response data as byte array</returns>
+        public byte[] WriteTag(string tagName, ushort dataType, byte[] data, ushort elements = 1)
+        {
+            if (sessionHandle == 0)
+                this.RegisterSession();
+
+            // Parse tag name for array index syntax like "TagName[index]"
+            string baseTagName = tagName;
+            int arrayIndex = -1;
+
+            int bracketPos = tagName.IndexOf('[');
+            if (bracketPos > 0)
+            {
+                int closeBracketPos = tagName.IndexOf(']', bracketPos);
+                if (closeBracketPos > bracketPos)
+                {
+                    baseTagName = tagName.Substring(0, bracketPos);
+                    string indexStr = tagName.Substring(bracketPos + 1, closeBracketPos - bracketPos - 1);
+                    if (!int.TryParse(indexStr, out arrayIndex) || arrayIndex < 0)
+                    {
+                        arrayIndex = -1;
+                    }
+                }
+            }
+
+            // Build the tag path (ANSI extended symbol segment)
+            List<byte> tagPath = new List<byte>();
+            tagPath.Add(0x91); // ANSI extended symbol segment
+            tagPath.Add((byte)baseTagName.Length); // String length
+            foreach (char c in baseTagName)
+            {
+                tagPath.Add((byte)c);
+            }
+            // Pad to even number of bytes
+            if (baseTagName.Length % 2 != 0)
+                tagPath.Add(0x00);
+
+            // Add array element segment if index was specified
+            if (arrayIndex >= 0)
+            {
+                if (arrayIndex <= 255)
+                {
+                    // 8-bit element segment
+                    tagPath.Add(0x28);
+                    tagPath.Add((byte)arrayIndex);
+                }
+                else if (arrayIndex <= 65535)
+                {
+                    // 16-bit element segment
+                    tagPath.Add(0x29);
+                    tagPath.Add(0x00); // Padding
+                    tagPath.Add((byte)(arrayIndex & 0xFF));
+                    tagPath.Add((byte)((arrayIndex >> 8) & 0xFF));
+                }
+            }
+
+            byte[] requestedPath = tagPath.ToArray();
+
+            Encapsulation encapsulation = new Encapsulation();
+            encapsulation.SessionHandle = sessionHandle;
+            encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
+            encapsulation.Length = (UInt16)(16 + 6 + requestedPath.Length + data.Length);
+
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+
+            Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat();
+            commonPacketFormat.ItemCount = 0x02;
+            commonPacketFormat.AddressItem = 0x0000;
+            commonPacketFormat.AddressLength = 0x0000;
+            commonPacketFormat.DataItem = 0xB2;
+            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + 4 + data.Length);
+
+            commonPacketFormat.Data.Add((byte)Sres.Net.EEIP.CIPCommonServices.Write_Tag);
+            commonPacketFormat.Data.Add((byte)(requestedPath.Length / 2));
+
+            for (int i = 0; i < requestedPath.Length; i++)
+            {
+                commonPacketFormat.Data.Add(requestedPath[i]);
+            }
+
+            commonPacketFormat.Data.Add((byte)(dataType & 0xFF));
+            commonPacketFormat.Data.Add((byte)((dataType >> 8) & 0xFF));
+            commonPacketFormat.Data.Add((byte)(elements & 0xFF));
+            commonPacketFormat.Data.Add((byte)((elements >> 8) & 0xFF));
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                commonPacketFormat.Data.Add(data[i]);
+            }
+
+            byte[] dataToWrite = new byte[encapsulation.toBytes().Length + commonPacketFormat.toBytes().Length];
+            System.Buffer.BlockCopy(encapsulation.toBytes(), 0, dataToWrite, 0, encapsulation.toBytes().Length);
+            System.Buffer.BlockCopy(commonPacketFormat.toBytes(), 0, dataToWrite, encapsulation.toBytes().Length, commonPacketFormat.toBytes().Length);
+
+            stream.Write(dataToWrite, 0, dataToWrite.Length);
+            byte[] response = new Byte[1024];
+            Int32 bytes = stream.Read(response, 0, response.Length);
+
+            if (response[42] != 0)
+            {
+                throw new CIPException(GeneralStatusCodes.GetStatusCode(response[42]));
+            }
+
+            byte[] returnData = new byte[bytes - 44];
+            System.Buffer.BlockCopy(response, 44, returnData, 0, bytes - 44);
+            return returnData;
+        }
+
+        /// <summary>
+        /// Simplified WriteTag overload
+        /// </summary>
+        public byte[] WriteTag(string tagName, byte[] data)
+        {
+            return WriteTag(tagName, 0x00C3, data, (ushort)(data.Length / 2));
+        }
+
+        /// <summary>
+        /// Implementation of Common Service "Write_Tag_Fragmented" - Service Code: 0x53
+        /// </summary>
+        public byte[] WriteTagFragmented(string tagName, ushort dataType, byte[] data, ushort elements, uint offset = 0)
+        {
+            if (sessionHandle == 0)
+                this.RegisterSession();
+
+            List<byte> tagPath = new List<byte>();
+            tagPath.Add(0x91);
+            tagPath.Add((byte)tagName.Length);
+            foreach (char c in tagName)
+            {
+                tagPath.Add((byte)c);
+            }
+            if (tagName.Length % 2 != 0)
+                tagPath.Add(0x00);
+
+            byte[] requestedPath = tagPath.ToArray();
+
+            Encapsulation encapsulation = new Encapsulation();
+            encapsulation.SessionHandle = sessionHandle;
+            encapsulation.Command = Encapsulation.CommandsEnum.SendRRData;
+            encapsulation.Length = (UInt16)(16 + 10 + requestedPath.Length + data.Length);
+
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+            encapsulation.CommandSpecificData.Add(0);
+
+            Encapsulation.CommonPacketFormat commonPacketFormat = new Encapsulation.CommonPacketFormat();
+            commonPacketFormat.ItemCount = 0x02;
+            commonPacketFormat.AddressItem = 0x0000;
+            commonPacketFormat.AddressLength = 0x0000;
+            commonPacketFormat.DataItem = 0xB2;
+            commonPacketFormat.DataLength = (UInt16)(2 + requestedPath.Length + 8 + data.Length);
+
+            commonPacketFormat.Data.Add((byte)Sres.Net.EEIP.CIPCommonServices.Write_Tag_Fragmented);
+            commonPacketFormat.Data.Add((byte)(requestedPath.Length / 2));
+
+            for (int i = 0; i < requestedPath.Length; i++)
+            {
+                commonPacketFormat.Data.Add(requestedPath[i]);
+            }
+
+            commonPacketFormat.Data.Add((byte)(dataType & 0xFF));
+            commonPacketFormat.Data.Add((byte)((dataType >> 8) & 0xFF));
+            commonPacketFormat.Data.Add((byte)(elements & 0xFF));
+            commonPacketFormat.Data.Add((byte)((elements >> 8) & 0xFF));
+            commonPacketFormat.Data.Add((byte)(offset & 0xFF));
+            commonPacketFormat.Data.Add((byte)((offset >> 8) & 0xFF));
+            commonPacketFormat.Data.Add((byte)((offset >> 16) & 0xFF));
+            commonPacketFormat.Data.Add((byte)((offset >> 24) & 0xFF));
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                commonPacketFormat.Data.Add(data[i]);
+            }
+
+            byte[] dataToWrite = new byte[encapsulation.toBytes().Length + commonPacketFormat.toBytes().Length];
+            System.Buffer.BlockCopy(encapsulation.toBytes(), 0, dataToWrite, 0, encapsulation.toBytes().Length);
+            System.Buffer.BlockCopy(commonPacketFormat.toBytes(), 0, dataToWrite, encapsulation.toBytes().Length, commonPacketFormat.toBytes().Length);
+
+            stream.Write(dataToWrite, 0, dataToWrite.Length);
+            byte[] response = new Byte[1024];
+            Int32 bytes = stream.Read(response, 0, response.Length);
+
+            if (response[42] != 0)
+            {
+                throw new CIPException(GeneralStatusCodes.GetStatusCode(response[42]));
+            }
+
+            byte[] returnData = new byte[bytes - 44];
+            System.Buffer.BlockCopy(response, 44, returnData, 0, bytes - 44);
+            return returnData;
+        }
         /// <summary>
         /// Get the Encrypted Request Path - See Volume 1 Appendix C (C9)
         /// e.g. for 8 Bit: 20 05 24 02 30 01

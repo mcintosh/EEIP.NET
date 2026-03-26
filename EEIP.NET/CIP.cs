@@ -34,7 +34,11 @@ namespace Sres.Net.EEIP
         Set_Member = 0x19,
         Insert_Member = 0x1A,
         Remove_Member = 0x1B,
-        GroupSync = 0x1C
+        GroupSync = 0x1C,
+        Read_Tag = 0x4C,
+        Read_Tag_Fragmented = 0x52,
+        Write_Tag = 0x4D,
+        Write_Tag_Fragmented = 0x53
     }
 
 
