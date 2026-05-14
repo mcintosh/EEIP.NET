@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29709.97
+# Visual Studio Version 18
+VisualStudioVersion = 18.4.11612.150 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EEIP", "EEIP.NET\EEIP.csproj", "{C7A980DD-A57F-4FC7-A555-10EDC85C749D}"
 EndProject
@@ -26,6 +26,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fanuc_R30iA", "Fanuc_R30iA\Fanuc_R30iA.csproj", "{9E73378B-0484-4717-A8DA-C15BB95A9B74}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fanuc_R30iA_Implicit", "Fanuc_R30iA_Implicit\Fanuc_R30iA_Implicit.csproj", "{0DF08474-7DCC-4566-B844-9F55BAFE4D61}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EEIPWinForms", "EEIPWinForms\EEIPWinForms.csproj", "{96B995BF-46BF-4A99-8D50-0450D8849335}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -81,6 +83,10 @@ Global
 		{0DF08474-7DCC-4566-B844-9F55BAFE4D61}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0DF08474-7DCC-4566-B844-9F55BAFE4D61}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0DF08474-7DCC-4566-B844-9F55BAFE4D61}.Release|Any CPU.Build.0 = Release|Any CPU
+		{96B995BF-46BF-4A99-8D50-0450D8849335}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{96B995BF-46BF-4A99-8D50-0450D8849335}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{96B995BF-46BF-4A99-8D50-0450D8849335}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{96B995BF-46BF-4A99-8D50-0450D8849335}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

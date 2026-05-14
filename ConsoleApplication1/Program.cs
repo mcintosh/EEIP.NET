@@ -100,37 +100,39 @@ namespace ConsoleApplication1
             */
 
 
-            // Write to INT_DATA starting at element index 10
+            // Write to INT_DATA starting at element index 2260
+            // Note: 2260 is MB 41011, which is the first element of the INT_DATA array
             ushort[] values = new ushort[] { 1, 2, 3, 4, 5 };
             byte[] arrayData1 = new byte[values.Length * 2];
             Buffer.BlockCopy(values, 0, arrayData1, 0, arrayData1.Length);
-            eeipClient.WriteTag("INT_DATA[10]", 0xC3, arrayData1, (ushort)values.Length);
-            Console.WriteLine("Successfully wrote 5 values starting at index 10");
+            eeipClient.WriteTag("INT_DATA[2260]", 0xC3, arrayData1, (ushort)values.Length);
+            Console.WriteLine("Successfully wrote 5 values starting at index 2260");
 
-            // Write a single value at index 100
+            // Write a single value at index 2250 (outgoing heartbeat value)
+            // Note: 2250 is MB 41001
             ushort singleVal = 9999;
             byte[] singleData = BitConverter.GetBytes(singleVal);
-            eeipClient.WriteTag("INT_DATA[100]", 0xC3, singleData, 1);
-            Console.WriteLine("Successfully wrote value at index 100");
+            eeipClient.WriteTag("INT_DATA[2250]", 0xC3, singleData, 1);
+            Console.WriteLine("Successfully wrote value at index 2250");
 
 
 
-            // Read 5 elements starting at index 10 of INT_DATA
-            byte[] tagData1 = eeipClient.ReadTag("INT_DATA[10]", 5);
+            // Read 5 elements starting at index 260 of INT_DATA (40101)
+            byte[] tagData1 = eeipClient.ReadTag("INT_DATA[260]", 5);
 
             // Parse the results (1st 2 bytes are data type code)
             for (int i = 2; i < tagData1.Length; i += 2)
             {
                 ushort value = BitConverter.ToUInt16(tagData1, i);
-                Console.WriteLine($"Element {10 + (i / 2)}: {value}");
+                Console.WriteLine($"Element {260 + (i / 2)}: {value}");
             }
 
-            // Read single element at index 100
-            byte[] singleValue = eeipClient.ReadTag("INT_DATA[100]", 1);
+            // Read single element at index 300 (40201)
+            byte[] singleValue = eeipClient.ReadTag("INT_DATA[300]", 1);
             if (singleValue.Length >= 2)
             {
                 ushort value = BitConverter.ToUInt16(singleValue, 2); // Skip the first 2 bytes (data type code)
-                Console.WriteLine($"Element 100: {value}");
+                Console.WriteLine($"Element 300: {value}");
             }
 
             // Read single element at index 250
